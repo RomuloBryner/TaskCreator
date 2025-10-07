@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const response = await fetch(LINEAR_API, {
       method: 'POST',
       headers: {
-        'Authorization': LINEAR_TOKEN,
+        'Authorization': LINEAR_TOKEN as string,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     const response = await fetch(LINEAR_API, {
       method: 'POST',
       headers: {
-        'Authorization': LINEAR_TOKEN,
+        'Authorization': LINEAR_TOKEN as string,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
