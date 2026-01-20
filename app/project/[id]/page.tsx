@@ -50,9 +50,42 @@ export default function ProjectPage() {
     if (!teamId || tareas.length === 0) return;
 
     setLoading(true);
-    const creadas = [];
+    const creadas: any[] = [];
 
     try {
+      let milestoneIssue: any | null = null;
+
+      // Si hay varias tareas, creamos primero un "milestone" como issue padre
+      if (tareas.length > 1) {
+        const tituloMilestone = `Milestone automático (${tareas.length} tareas)`;
+        const descripcionMilestone =
+          'Este milestone agrupa automáticamente un conjunto de tareas creadas desde Task Creator.\n\n' +
+          tareas
+            .map(
+              (t, idx) =>
+                `- Tarea ${idx + 1}: ${t.title.substring(0, 70)}`
+            )
+            .join('\n');
+
+        const milestoneResponse = await fetch('/api/linear/issues', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: tituloMilestone,
+            description: descripcionMilestone,
+            priority: 'high',
+            teamId,
+            projectId,
+          }),
+        });
+
+        if (milestoneResponse.ok) {
+          milestoneIssue = await milestoneResponse.json();
+          creadas.push(milestoneIssue);
+        }
+      }
+
+      // Crear las tareas normales
       for (const tarea of tareas) {
         const response = await fetch('/api/linear/issues', {
           method: 'POST',
@@ -66,8 +99,38 @@ export default function ProjectPage() {
 
         if (response.ok) {
           const issue = await response.json();
-          creadas.push(issue);
+          // Guardamos también la descripción original para poder actualizarla después
+          creadas.push({
+            ...issue,
+            originalDescription: tarea.description,
+          });
         }
+      }
+
+      // Si se creó un milestone y hay varias tareas, actualizamos las descripciones
+      // para reflejar el milestone y una cadena simple de dependencias
+      if (milestoneIssue && creadas.length > 1) {
+        const tareasSoloIssues = creadas.filter(
+          (item) => item.id !== milestoneIssue.id
+        );
+
+        await fetch('/api/linear/issues/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            milestone: {
+              id: milestoneIssue.id,
+              identifier: milestoneIssue.identifier,
+              url: milestoneIssue.url,
+            },
+            issues: tareasSoloIssues.map((issue) => ({
+              id: issue.id,
+              identifier: issue.identifier,
+              url: issue.url,
+              originalDescription: issue.originalDescription,
+            })),
+          }),
+        });
       }
 
       setTareasCreadas(creadas);
