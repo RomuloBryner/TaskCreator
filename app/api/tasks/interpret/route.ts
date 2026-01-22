@@ -77,7 +77,6 @@ ${texto}
     const response = await openai.chat.completions.create({
       model: 'gpt-5-nano-2025-08-07',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
     });
 
     const textoEstructurado = response.choices[0].message.content?.trim() || '';
@@ -91,10 +90,7 @@ ${texto}
     });
   } catch (error) {
     console.error('Error al interpretar tarea:', error);
-    return NextResponse.json(
-      { error: 'Error al interpretar tarea' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Error al interpretar tarea: ' + error }, { status: 500 });
   }
 }
 
