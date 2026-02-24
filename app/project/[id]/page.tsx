@@ -74,6 +74,7 @@ export default function ProjectPage() {
   const clearAudio = () => {
     setAudioBlob(null);
     setUploadedFile(null);
+    setTexto('');
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,10 +82,51 @@ export default function ProjectPage() {
     if (file) {
       setUploadedFile(file);
       setAudioBlob(null);
+      setTexto('');
     }
   };
 
-  // ---- Step 1: Interpret ----
+  // ---- Step 1A: Transcribe audio (Whisper) ----
+
+  const handleTranscribeAudio = async () => {
+    if (!teamId) return;
+    setProcessing(true);
+    setErrorMsg('');
+
+    try {
+      const formData = new FormData();
+      formData.append('projectId', projectId);
+      formData.append('teamId', teamId);
+      formData.append('onlyTranscription', 'true');
+
+      if (inputMode === 'record' && audioBlob) {
+        formData.append('audio', audioBlob, 'recording.webm');
+      } else if (inputMode === 'upload' && uploadedFile) {
+        formData.append('audio', uploadedFile);
+      } else {
+        throw new Error('Selecciona o graba un audio primero');
+      }
+
+      const response = await fetch('/api/create-task', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al transcribir audio');
+      }
+
+      setTexto(data.transcribedText || '');
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Error al transcribir audio');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // ---- Step 1B: Interpret editable text with GPT ----
 
   const handleInterpret = async () => {
     if (!teamId) return;
@@ -95,14 +137,7 @@ export default function ProjectPage() {
       const formData = new FormData();
       formData.append('projectId', projectId);
       formData.append('teamId', teamId);
-
-      if (inputMode === 'record' && audioBlob) {
-        formData.append('audio', audioBlob, 'recording.webm');
-      } else if (inputMode === 'upload' && uploadedFile) {
-        formData.append('audio', uploadedFile);
-      } else {
-        formData.append('text', texto);
-      }
+      formData.append('text', texto);
 
       const response = await fetch('/api/create-task', {
         method: 'POST',
@@ -116,7 +151,7 @@ export default function ProjectPage() {
       }
 
       setInterpretedTask(data.task);
-      setTranscribedText(data.transcribedText || texto);
+      setTranscribedText(texto);
       setFlowStep('preview');
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : 'Error al interpretar');
@@ -178,7 +213,9 @@ export default function ProjectPage() {
   };
 
   const canSubmit =
-    (inputMode === 'text' && texto.trim()) ||
+    Boolean(texto.trim());
+
+  const canTranscribeAudio =
     (inputMode === 'record' && audioBlob) ||
     (inputMode === 'upload' && uploadedFile);
 
@@ -426,6 +463,44 @@ export default function ProjectPage() {
               </div>
             )}
 
+            {/* Editable text before GPT */}
+            {inputMode !== 'text' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Texto transcrito editable (puedes ajustarlo antes de formalizar)
+                </label>
+                <textarea
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  placeholder="Primero transcribe el audio. Luego edita aquí el contexto antes de enviarlo a GPT..."
+                  className="w-full h-40 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
+                />
+              </div>
+            )}
+
+            {/* Transcribe audio button */}
+            {inputMode !== 'text' && (
+              <button
+                onClick={handleTranscribeAudio}
+                disabled={!canTranscribeAudio || processing}
+                className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {processing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <span>Analizando audio...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-2c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                    </svg>
+                    <span>Analizar audio con Whisper</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {/* Submit button */}
             <button
               onClick={handleInterpret}
@@ -442,7 +517,7 @@ export default function ProjectPage() {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <span>Interpretar con IA</span>
+                  <span>Formalizar con GPT</span>
                 </>
               )}
             </button>

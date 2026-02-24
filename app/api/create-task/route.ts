@@ -12,15 +12,17 @@ export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") ?? "";
     let text: string;
-    let projectId: string;
-    let teamId: string;
+    let projectId: string | undefined;
+    let teamId: string | undefined;
+    let onlyTranscription = false;
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
-      projectId = formData.get("projectId") as string;
-      teamId = formData.get("teamId") as string;
+      projectId = (formData.get("projectId") as string) || undefined;
+      teamId = (formData.get("teamId") as string) || undefined;
       const audioFile = formData.get("audio") as File | null;
       const textField = formData.get("text") as string | null;
+      onlyTranscription = formData.get("onlyTranscription") === "true";
 
       if (audioFile && audioFile.size > 0) {
         try {
@@ -45,6 +47,13 @@ export async function POST(request: Request) {
       projectId = body.projectId;
       teamId = body.teamId;
       text = body.text;
+      onlyTranscription = Boolean(body.onlyTranscription);
+    }
+
+    if (onlyTranscription) {
+      return NextResponse.json({
+        transcribedText: text.trim(),
+      });
     }
 
     if (!projectId || !teamId) {
